@@ -536,6 +536,8 @@ function App() {
           </div>
         </div>
       ) : null}
+
+      <div className="letterbox" aria-hidden="true" />
     </div>
   )
 }
