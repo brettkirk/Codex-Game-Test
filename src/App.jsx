@@ -285,7 +285,7 @@ function App() {
     row.slice(cameraX, cameraX + VIEWPORT.width)
   )
 
-  const tileSize = `calc(100vw / ${VIEWPORT.width})`
+  const tileSize = `calc(min(100vw, 100vh * 16 / 9) / ${VIEWPORT.width})`
 
   return (
     <div className="page">
@@ -296,7 +296,7 @@ function App() {
             '--tile-size': tileSize,
             gridTemplateColumns: `repeat(${VIEWPORT.width}, var(--tile-size))`,
             gridTemplateRows: `repeat(${VIEWPORT.height}, var(--tile-size))`,
-            width: '100vw',
+            width: `calc(var(--tile-size) * ${VIEWPORT.width})`,
             height: `calc(var(--tile-size) * ${VIEWPORT.height})`,
           }}
         >
