@@ -10,19 +10,33 @@ const TILE_TYPES = {
 }
 
 const MAP_LAYOUT = [
-  '################',
-  '#...G...G....T.#',
-  '#..GG..###..G..#',
-  '#......#..G....#',
-  '#..T...#...G...#',
-  '#......#..GG...#',
-  '#..GG..#..G....#',
-  '#......#.......#',
-  '#...G..#..T....#',
-  '#......#.......#',
-  '#..GG.....G....#',
-  '################',
+  '########################################',
+  '#....G....G...T.....GG....G.....G......#',
+  '#..GG..###..G......###...G......GG.....#',
+  '#......#..G.....G.....G..#..T......G...#',
+  '#..T...#...G...#####....#..GG.....#....#',
+  '#......#..GG...#...#....#..G...#..#..G.#',
+  '#..GG..#..G....#...#..G.#......#..#....#',
+  '#......#.......#...####.#..G...#..#....#',
+  '#...G..#..T....#........#......#..#....#',
+  '#......#.......#..GG....#..G...#..#....#',
+  '#..GG.....G....#...#....#......#..#....#',
+  '#.....#####....#...#....#..T...#..#....#',
+  '#....G.....G...#...###..#......#..#..G.#',
+  '#..GG..#..G....#.......G#...G..#..#....#',
+  '#......#..G....#..T.....#......#..#....#',
+  '#..T...#...G...#........#..GG..#..#....#',
+  '#......#..GG...#..G.....#......#..#....#',
+  '#..GG..#..G....#........#..G...#..#..G.#',
+  '#......#.......#..GG....#......#..#....#',
+  '#...G..#..T....#...#....#..T...#..#....#',
+  '#......#.......#...#....#......#..#....#',
+  '#..GG.....G....#...#....#..G...#..#....#',
+  '#.....#####....#...#....#......#..#....#',
+  '########################################',
 ]
+
+const VIEWPORT = { width: 32, height: 18 }
 
 const CREATURE_LIBRARY = [
   {
@@ -88,6 +102,8 @@ function App() {
   const [team, setTeam] = useState(() => [createCreature(0), createCreature(1)])
   const [activeMember, setActiveMember] = useState(0)
   const [turn, setTurn] = useState('player')
+  const [isPaused, setIsPaused] = useState(false)
+  const [backpackOpen, setBackpackOpen] = useState(false)
 
   const mapHeight = MAP_LAYOUT.length
   const mapWidth = MAP_LAYOUT[0].length
@@ -100,8 +116,25 @@ function App() {
 
   useEffect(() => {
     const handleKey = (event) => {
-      if (battle.active) return
-      const direction = event.key.toLowerCase()
+      const key = event.key.toLowerCase()
+
+      if (key === 'escape') {
+        event.preventDefault()
+        setIsPaused((prev) => !prev)
+        setBackpackOpen(false)
+        return
+      }
+
+      if (key === 'p') {
+        event.preventDefault()
+        setBackpackOpen((prev) => !prev)
+        setIsPaused(false)
+        return
+      }
+
+      if (battle.active || isPaused || backpackOpen) return
+
+      const direction = key
       const deltas = {
         arrowup: { dx: 0, dy: -1 },
         w: { dx: 0, dy: -1 },
@@ -122,7 +155,7 @@ function App() {
 
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [battle.active, playerPosition])
+  }, [battle.active, backpackOpen, isPaused, playerPosition])
 
   const addMessage = (msg) => {
     setMessageLog((prev) => [msg, ...prev].slice(0, 6))
@@ -247,7 +280,16 @@ function App() {
     ])
     setBattle({ active: false, opponent: null })
     setTurn('player')
+    setIsPaused(false)
+    setBackpackOpen(false)
   }
+
+  const cameraX = Math.min(Math.max(playerPosition.x - Math.floor(VIEWPORT.width / 2), 0), mapWidth - VIEWPORT.width)
+  const cameraY = Math.min(Math.max(playerPosition.y - Math.floor(VIEWPORT.height / 2), 0), mapHeight - VIEWPORT.height)
+
+  const visibleTiles = MAP_LAYOUT.slice(cameraY, cameraY + VIEWPORT.height).map((row) =>
+    row.slice(cameraX, cameraX + VIEWPORT.width)
+  )
 
   return (
     <div className="page">
@@ -264,9 +306,17 @@ function App() {
 
       <section className="layout">
         <div className="map-card">
-          <div className="map" style={{ gridTemplateColumns: `repeat(${mapWidth}, 1fr)` }}>
-            {MAP_LAYOUT.map((row, y) =>
-              row.split('').map((tileChar, x) => {
+          <div
+            className="map"
+            style={{
+              gridTemplateColumns: `repeat(${VIEWPORT.width}, 1fr)`,
+              gridTemplateRows: `repeat(${VIEWPORT.height}, 1fr)`,
+            }}
+          >
+            {visibleTiles.map((row, yOffset) =>
+              row.split('').map((tileChar, xOffset) => {
+                const x = cameraX + xOffset
+                const y = cameraY + yOffset
                 const tile = TILE_TYPES[tileChar]
                 const isPlayer = playerPosition.x === x && playerPosition.y === y
                 return (
@@ -293,6 +343,7 @@ function App() {
             </div>
           </div>
           <p className="hint">Currently standing on: {currentTile.label}</p>
+          <p className="hint">View window: {VIEWPORT.width} × {VIEWPORT.height}</p>
         </div>
 
         <div className="panel">
@@ -339,6 +390,67 @@ function App() {
           </div>
         </div>
       </section>
+
+      {isPaused ? (
+        <div className="overlay">
+          <div className="overlay-card">
+            <p className="eyebrow">Paused</p>
+            <h2>Take a breather</h2>
+            <p className="sub">Review your plan or hop back into your stroll across the isles.</p>
+            <div className="overlay-actions">
+              <button className="secondary" onClick={() => setIsPaused(false)}>
+                Resume Adventure
+              </button>
+              <button className="secondary" onClick={resetExploration}>
+                Return to Plaza
+              </button>
+            </div>
+            <p className="hint">Press Esc to close the pause menu.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {backpackOpen ? (
+        <div className="overlay">
+          <div className="overlay-card">
+            <p className="eyebrow">Backpack & Party</p>
+            <h2>Adjust your companions</h2>
+            <p className="sub">Swap the lead partner or check on your team before the next step.</p>
+            <div className="overlay-list">
+              {team.map((member, index) => (
+                <button
+                  key={member.id}
+                  className={`team-card ${index === activeMember ? 'active' : ''}`}
+                  onClick={() => setActiveMember(index)}
+                >
+                  <div className="avatar" style={{ backgroundColor: member.color }} />
+                  <div className="stats">
+                    <div className="row">
+                      <span className="name">{member.name}</span>
+                      <span className="badge">Lv {member.level}</span>
+                    </div>
+                    <div className="hp-bar">
+                      <div className="hp-fill" style={{ width: `${(member.hp / member.maxHp) * 100}%` }} />
+                    </div>
+                    <div className="row subtle">
+                      <span>{member.type} type</span>
+                      <span>
+                        {member.hp}/{member.maxHp} HP
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="overlay-actions">
+              <button className="secondary" onClick={() => setBackpackOpen(false)}>
+                Close Backpack
+              </button>
+            </div>
+            <p className="hint">Press P again to close.</p>
+          </div>
+        </div>
+      ) : null}
 
       {battle.active && battle.opponent ? (
         <div className="battle">
