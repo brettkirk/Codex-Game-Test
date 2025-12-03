@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 
 const TILE_TYPES = {
@@ -94,7 +94,7 @@ function createCreature(seedIndex = 0) {
 
 function App() {
   const [playerPosition, setPlayerPosition] = useState({ x: 1, y: 1 })
-  const [messageLog, setMessageLog] = useState([
+  const [, setMessageLog] = useState([
     'You arrive at the Sunpetal Isles—creatures hum with energy in the grass.',
     'Use the arrow keys or WASD to explore. Step into grass to trigger a battle.',
   ])
@@ -107,12 +107,6 @@ function App() {
 
   const mapHeight = MAP_LAYOUT.length
   const mapWidth = MAP_LAYOUT[0].length
-
-  const currentTile = useMemo(() => {
-    const row = MAP_LAYOUT[playerPosition.y]
-    const tileChar = row?.[playerPosition.x] ?? '#'
-    return TILE_TYPES[tileChar] || TILE_TYPES['.']
-  }, [playerPosition])
 
   useEffect(() => {
     const handleKey = (event) => {
@@ -291,105 +285,40 @@ function App() {
     row.slice(cameraX, cameraX + VIEWPORT.width)
   )
 
+  const tileSize = `calc(100vw / ${VIEWPORT.width})`
+
   return (
     <div className="page">
-      <header className="header">
-        <div>
-          <p className="eyebrow">Sunpetal Isles</p>
-          <h1>Mon Bound — Tiny Adventure</h1>
-          <p className="sub">Explore, befriend, and spar with vivid little spirits in a cozy archipelago.</p>
-        </div>
-        <button className="secondary" onClick={resetExploration}>
-          Reset Run
-        </button>
-      </header>
-
-      <section className="layout">
-        <div className="map-card">
-          <div
-            className="map"
-            style={{
-              gridTemplateColumns: `repeat(${VIEWPORT.width}, 1fr)`,
-              gridTemplateRows: `repeat(${VIEWPORT.height}, 1fr)`,
-            }}
-          >
-            {visibleTiles.map((row, yOffset) =>
-              row.split('').map((tileChar, xOffset) => {
-                const x = cameraX + xOffset
-                const y = cameraY + yOffset
-                const tile = TILE_TYPES[tileChar]
-                const isPlayer = playerPosition.x === x && playerPosition.y === y
-                return (
-                  <div
-                    key={`${x}-${y}`}
-                    className={`tile tile-${tile.key}`}
-                    style={{ backgroundColor: tile.color }}
-                  >
-                    {isPlayer ? <div className="player" /> : null}
-                  </div>
-                )
-              })
-            )}
-          </div>
-          <div className="legend">
-            {Object.values(TILE_TYPES).map((tile) => (
-              <div key={tile.key} className="legend-item">
-                <span className="swatch" style={{ backgroundColor: tile.color }} />
-                <span>{tile.label}</span>
-              </div>
-            ))}
-            <div className="legend-item">
-              <span className="swatch player-swatch" /> <span>Player</span>
-            </div>
-          </div>
-          <p className="hint">Currently standing on: {currentTile.label}</p>
-          <p className="hint">View window: {VIEWPORT.width} × {VIEWPORT.height}</p>
-        </div>
-
-        <div className="panel">
-          <div className="team">
-            <h2>Companions</h2>
-            <div className="team-grid">
-              {team.map((member, index) => (
-                <button
-                  key={member.id}
-                  className={`team-card ${index === activeMember ? 'active' : ''}`}
-                  onClick={() => setActiveMember(index)}
+      <main className="playfield">
+        <div
+          className="map"
+          style={{
+            '--tile-size': tileSize,
+            gridTemplateColumns: `repeat(${VIEWPORT.width}, var(--tile-size))`,
+            gridTemplateRows: `repeat(${VIEWPORT.height}, var(--tile-size))`,
+            width: '100vw',
+            height: `calc(var(--tile-size) * ${VIEWPORT.height})`,
+          }}
+        >
+          {visibleTiles.map((row, yOffset) =>
+            row.split('').map((tileChar, xOffset) => {
+              const x = cameraX + xOffset
+              const y = cameraY + yOffset
+              const tile = TILE_TYPES[tileChar]
+              const isPlayer = playerPosition.x === x && playerPosition.y === y
+              return (
+                <div
+                  key={`${x}-${y}`}
+                  className={`tile tile-${tile.key}`}
+                  style={{ backgroundColor: tile.color }}
                 >
-                  <div className="avatar" style={{ backgroundColor: member.color }} />
-                  <div className="stats">
-                    <div className="row">
-                      <span className="name">{member.name}</span>
-                      <span className="badge">Lv {member.level}</span>
-                    </div>
-                    <div className="hp-bar">
-                      <div
-                        className="hp-fill"
-                        style={{ width: `${(member.hp / member.maxHp) * 100}%` }}
-                      />
-                    </div>
-                    <div className="row subtle">
-                      <span>{member.type} type</span>
-                      <span>
-                        {member.hp}/{member.maxHp} HP
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="log">
-            <h2>Adventure Log</h2>
-            <ul>
-              {messageLog.map((entry, index) => (
-                <li key={index}>{entry}</li>
-              ))}
-            </ul>
-          </div>
+                  {isPlayer ? <div className="player" /> : null}
+                </div>
+              )
+            })
+          )}
         </div>
-      </section>
+      </main>
 
       {isPaused ? (
         <div className="overlay">
