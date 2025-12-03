@@ -36,8 +36,9 @@ h1 {
 
 .layout {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
   gap: 18px;
+  min-height: calc(100vh - 150px);
 }
 
 .map-card {
@@ -46,12 +47,17 @@ h1 {
   box-shadow: 0 14px 38px rgba(17, 24, 39, 0.08);
   padding: 16px;
   border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
 }
 
 .map {
   display: grid;
   gap: 3px;
-  aspect-ratio: 1 / 1;
+  flex: 1;
+  min-height: 360px;
+  aspect-ratio: 32 / 18;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #d1d5db;
@@ -134,6 +140,40 @@ h1 {
   margin: 10px 0 0;
   color: #6b7280;
   font-size: 13px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 12;
+}
+
+.overlay-card {
+  background: white;
+  color: #111827;
+  width: min(960px, 92vw);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.12);
+}
+
+.overlay-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.overlay-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
 }
 
 .panel {
