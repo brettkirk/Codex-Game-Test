@@ -56,6 +56,7 @@ h1 {
   display: grid;
   gap: 3px;
   flex: 1;
+  width: 100%;
   min-height: 360px;
   aspect-ratio: 32 / 18;
   border-radius: 10px;
@@ -399,5 +400,22 @@ h1 {
 
   .battle-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.letterbox {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 20;
+}
+
+@media (max-aspect-ratio: 16/9) {
+  .letterbox {
+    height: calc(100vh - (100vw * 9 / 16));
   }
 }
