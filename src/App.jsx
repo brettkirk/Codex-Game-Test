@@ -111,6 +111,10 @@ function App() {
     'Use the arrow keys or WASD to explore. Step into grass to trigger a battle, and watch for trainers.',
   ])
   const [battle, setBattle] = useState({ active: false, opponent: null, trainerId: null })
+  const [screen, setScreen] = useState('menu')
+  const [showNewGameForm, setShowNewGameForm] = useState(false)
+  const [seedInput, setSeedInput] = useState('')
+  const [activeSeed, setActiveSeed] = useState('')
   const [team, setTeam] = useState(() => [createCreature(0), createCreature(1)])
   const [activeMember, setActiveMember] = useState(0)
   const [turn, setTurn] = useState('player')
@@ -125,6 +129,8 @@ function App() {
   useEffect(() => {
     const handleKey = (event) => {
       const key = event.key.toLowerCase()
+
+      if (screen !== 'playing') return
 
       if (key === 'escape') {
         event.preventDefault()
@@ -163,7 +169,7 @@ function App() {
 
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [battle.active, backpackOpen, isPaused, playerPosition])
+  }, [battle.active, backpackOpen, isPaused, playerPosition, screen])
 
   useEffect(() => {
     const trainerIds = new Set(trainers.map((trainer) => trainer.id))
@@ -388,6 +394,24 @@ function App() {
     setTrainers(initializeTrainers())
   }
 
+  const startNewGame = () => {
+    const trimmedSeed = seedInput.trim()
+    const generatedSeed = Math.random().toString(36).slice(2, 10)
+    const nextSeed = trimmedSeed || generatedSeed
+    setActiveSeed(nextSeed)
+    resetExploration()
+    setScreen('playing')
+    setShowNewGameForm(false)
+    setSeedInput('')
+  }
+
+  const returnToMainMenu = () => {
+    resetExploration()
+    setScreen('menu')
+    setShowNewGameForm(false)
+    setSeedInput('')
+  }
+
   const cameraX = Math.min(Math.max(playerPosition.x - Math.floor(VIEWPORT.width / 2), 0), mapWidth - VIEWPORT.width)
   const cameraY = Math.min(Math.max(playerPosition.y - Math.floor(VIEWPORT.height / 2), 0), mapHeight - VIEWPORT.height)
 
@@ -437,13 +461,19 @@ function App() {
           <div className="overlay-card">
             <p className="eyebrow">Paused</p>
             <h2>Take a breather</h2>
-            <p className="sub">Review your plan or hop back into your stroll across the isles.</p>
+            <p className="sub">Save your progress, revisit a previous journey, or head back out.</p>
             <div className="overlay-actions">
-              <button className="secondary" onClick={() => setIsPaused(false)}>
-                Resume Adventure
+              <button className="secondary" onClick={() => {}}>
+                Save Game
               </button>
-              <button className="secondary" onClick={resetExploration}>
-                Return to Plaza
+              <button className="secondary" onClick={() => {}}>
+                Load Game
+              </button>
+              <button className="secondary" onClick={() => setIsPaused(false)}>
+                Resume Game
+              </button>
+              <button className="secondary" onClick={returnToMainMenu}>
+                Exit To Main Menu
               </button>
             </div>
             <p className="hint">Press Esc to close the pause menu.</p>
@@ -578,6 +608,50 @@ function App() {
               </div>
               {turn !== 'player' ? <p className="hint">The wild creature is preparing a move…</p> : null}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {screen === 'menu' ? (
+        <div className="overlay">
+          <div className="overlay-card menu-card">
+            <p className="eyebrow">Codex Quest</p>
+            <h1>Welcome back, explorer</h1>
+            <p className="sub">Start a fresh journey or pick up from an earlier save.</p>
+
+            <div className="menu-actions">
+              <button
+                className="primary"
+                onClick={() => setShowNewGameForm(true)}
+              >
+                New Game
+              </button>
+              <button className="secondary" onClick={() => {}}>
+                Load Game
+              </button>
+            </div>
+
+            {showNewGameForm ? (
+              <div className="new-game-form">
+                <label className="input-group">
+                  <span>Seed</span>
+                  <input
+                    type="text"
+                    placeholder="Leave blank for a random seed"
+                    value={seedInput}
+                    onChange={(event) => setSeedInput(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary" onClick={startNewGame}>
+                    Start Game
+                  </button>
+                  {activeSeed ? (
+                    <p className="hint">Last used seed: {activeSeed}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
