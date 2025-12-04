@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import MAP_FRAGMENTS from './data/mapLayout.json'
 
@@ -20,11 +20,35 @@ const TILE_TYPES = {
   G: { key: 'grass', label: 'Tall Grass', color: '#4caf50' },
   W: { key: 'water', label: 'Water', color: '#78c7ff' },
   T: { key: 'town', label: 'Town Plaza', color: '#f2b8b5' },
+  X: { key: 'trainer', label: 'Trainer', color: '#f59e0b' },
 }
 
 const DEFAULT_TILE = TILE_TYPES['.']
 
 const VIEWPORT = { width: 32, height: 18 }
+
+const FACING_DELTAS = {
+  up: { dx: 0, dy: -1 },
+  right: { dx: 1, dy: 0 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+}
+
+const facingKeys = Object.keys(FACING_DELTAS)
+
+const getRandomFacing = () => facingKeys[Math.floor(Math.random() * facingKeys.length)]
+
+const initializeTrainers = () => {
+  const trainers = []
+  MAP_LAYOUT.forEach((row, y) => {
+    row.split('').forEach((char, x) => {
+      if (char === 'X') {
+        trainers.push({ id: `${x}-${y}`, x, y, facing: getRandomFacing(), defeated: false })
+      }
+    })
+  })
+  return trainers
+}
 
 const CREATURE_LIBRARY = [
   {
@@ -84,14 +108,16 @@ function App() {
   const [playerPosition, setPlayerPosition] = useState(() => ({ ...START_POSITION }))
   const [, setMessageLog] = useState([
     'You arrive at the Sunpetal Isles—creatures hum with energy in the grass.',
-    'Use the arrow keys or WASD to explore. Step into grass to trigger a battle.',
+    'Use the arrow keys or WASD to explore. Step into grass to trigger a battle, and watch for trainers.',
   ])
-  const [battle, setBattle] = useState({ active: false, opponent: null })
+  const [battle, setBattle] = useState({ active: false, opponent: null, trainerId: null })
   const [team, setTeam] = useState(() => [createCreature(0), createCreature(1)])
   const [activeMember, setActiveMember] = useState(0)
   const [turn, setTurn] = useState('player')
   const [isPaused, setIsPaused] = useState(false)
   const [backpackOpen, setBackpackOpen] = useState(false)
+  const [trainers, setTrainers] = useState(() => initializeTrainers())
+  const rotationTimers = useRef({})
 
   const mapHeight = MAP_LAYOUT.length
   const mapWidth = MAP_LAYOUT[0].length
@@ -139,8 +165,90 @@ function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [battle.active, backpackOpen, isPaused, playerPosition])
 
+  useEffect(() => {
+    const trainerIds = new Set(trainers.map((trainer) => trainer.id))
+    Object.entries(rotationTimers.current).forEach(([trainerId, timeoutId]) => {
+      if (!trainerIds.has(trainerId)) {
+        clearTimeout(timeoutId)
+        delete rotationTimers.current[trainerId]
+      }
+    })
+
+    trainers.forEach((trainer) => {
+      const existingTimer = rotationTimers.current[trainer.id]
+      if (trainer.defeated) {
+        if (existingTimer) {
+          clearTimeout(existingTimer)
+          delete rotationTimers.current[trainer.id]
+        }
+        return
+      }
+
+      if (existingTimer) return
+
+      const scheduleRotation = () => {
+        const delay = 5000 + Math.random() * 5000
+        rotationTimers.current[trainer.id] = setTimeout(() => {
+          setTrainers((prev) =>
+            prev.map((t) => (t.id === trainer.id ? { ...t, facing: getRandomFacing() } : t))
+          )
+          delete rotationTimers.current[trainer.id]
+        }, delay)
+      }
+
+      scheduleRotation()
+    })
+  }, [trainers])
+
+  useEffect(
+    () => () => {
+      Object.values(rotationTimers.current).forEach((timeoutId) => clearTimeout(timeoutId))
+      rotationTimers.current = {}
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (battle.active || isPaused || backpackOpen) return
+
+    const watcher = trainers.find((trainer) => isPlayerInTrainerSight(trainer))
+    if (watcher) {
+      startTrainerBattle(watcher)
+    }
+  }, [backpackOpen, battle.active, isPaused, playerPosition, trainers])
+
   const addMessage = (msg) => {
     setMessageLog((prev) => [msg, ...prev].slice(0, 6))
+  }
+
+  const markTrainerDefeated = (trainerId) => {
+    setTrainers((prev) =>
+      prev.map((trainer) => (trainer.id === trainerId ? { ...trainer, defeated: true } : trainer))
+    )
+  }
+
+  const isPlayerInTrainerSight = (trainer) => {
+    if (trainer.defeated) return false
+
+    const delta = FACING_DELTAS[trainer.facing]
+    for (let step = 1; step <= 3; step++) {
+      const checkX = trainer.x + delta.dx * step
+      const checkY = trainer.y + delta.dy * step
+
+      if (checkX < 0 || checkY < 0 || checkX >= mapWidth || checkY >= mapHeight) break
+      if (MAP_LAYOUT[checkY][checkX] === '#') break
+      if (playerPosition.x === checkX && playerPosition.y === checkY) return true
+    }
+
+    return false
+  }
+
+  const startTrainerBattle = (trainer) => {
+    const foeIndex = Math.floor(Math.random() * CREATURE_LIBRARY.length)
+    const rival = createCreature(foeIndex)
+    setBattle({ active: true, opponent: rival, trainerId: trainer.id })
+    setTurn('player')
+    addMessage('A trainer challenges you to a duel!')
   }
 
   const movePlayer = ({ dx, dy }) => {
@@ -172,18 +280,22 @@ function App() {
   const openBattle = () => {
     const wildIndex = Math.floor(Math.random() * CREATURE_LIBRARY.length)
     const wild = createCreature(wildIndex)
-    setBattle({ active: true, opponent: wild })
+    setBattle({ active: true, opponent: wild, trainerId: null })
     setTurn('player')
     addMessage(`A wild ${wild.name} appeared!`)
   }
 
-  const closeBattle = (resultMessage) => {
+  const closeBattle = (resultMessage, defeatedTrainerId = null) => {
+    if (defeatedTrainerId) {
+      markTrainerDefeated(defeatedTrainerId)
+    }
     addMessage(resultMessage)
-    setBattle({ active: false, opponent: null })
+    setBattle({ active: false, opponent: null, trainerId: null })
     setTurn('player')
   }
 
   const currentMember = team[activeMember]
+  const isTrainerBattle = Boolean(battle.trainerId)
 
   const handleAbility = (ability) => {
     if (!battle.active || !battle.opponent) return
@@ -197,7 +309,11 @@ function App() {
 
     if (updatedOpponentHp <= 0) {
       awardVictory()
-      closeBattle(`The wild ${battle.opponent.name} was pacified. Your team gained confidence!`)
+      if (battle.trainerId) {
+        closeBattle('The trainer concedes defeat and lets you pass.', battle.trainerId)
+      } else {
+        closeBattle(`The wild ${battle.opponent.name} was pacified. Your team gained confidence!`)
+      }
     } else {
       setTurn('foe')
       setTimeout(() => foeTurn(updatedOpponent), 450)
@@ -214,7 +330,8 @@ function App() {
       updated[activeMember] = { ...target, hp: newHp }
       return updated
     })
-    addMessage(`Wild ${opponentState.name} strikes with ${foeAbility.name}! (${damage} dmg) `)
+    const attackerLabel = isTrainerBattle ? "Trainer's" : 'Wild'
+    addMessage(`${attackerLabel} ${opponentState.name} strikes with ${foeAbility.name}! (${damage} dmg) `)
 
     const targetHp = team[activeMember].hp - damage
     if (targetHp <= 0) {
@@ -250,6 +367,10 @@ function App() {
 
   const handleFlee = () => {
     if (!battle.active) return
+    if (isTrainerBattle) {
+      closeBattle("You slip away from the trainer's gaze before the battle escalates.")
+      return
+    }
     closeBattle('You retreat to rethink your approach. The wild creature wanders off.')
   }
 
@@ -258,12 +379,13 @@ function App() {
     healTeam()
     setMessageLog([
       'Your team regroups at the island gate with renewed focus.',
-      'Use the arrow keys or WASD to move. Wander in the grass to find encounters.',
+      'Use the arrow keys or WASD to move. Wander in the grass to find encounters and be wary of trainers.',
     ])
-    setBattle({ active: false, opponent: null })
+    setBattle({ active: false, opponent: null, trainerId: null })
     setTurn('player')
     setIsPaused(false)
     setBackpackOpen(false)
+    setTrainers(initializeTrainers())
   }
 
   const cameraX = Math.min(Math.max(playerPosition.x - Math.floor(VIEWPORT.width / 2), 0), mapWidth - VIEWPORT.width)
@@ -294,12 +416,14 @@ function App() {
               const y = cameraY + yOffset
               const tile = TILE_TYPES[tileChar] ?? DEFAULT_TILE
               const isPlayer = playerPosition.x === x && playerPosition.y === y
+              const trainerOnTile = trainers.find((trainer) => trainer.x === x && trainer.y === y && !trainer.defeated)
               return (
                 <div
                   key={`${x}-${y}`}
                   className={`tile tile-${tile.key}`}
                   style={{ backgroundColor: tile.color }}
                 >
+                  {trainerOnTile ? <div className={`trainer facing-${trainerOnTile.facing}`} /> : null}
                   {isPlayer ? <div className="player" /> : null}
                 </div>
               )
@@ -371,17 +495,21 @@ function App() {
 
       {battle.active && battle.opponent ? (
         <div className="battle">
-          <div className="battle-card">
-            <div className="battle-header">
-              <div>
-                <p className="eyebrow">Encounter</p>
-                <h2>Wild {battle.opponent.name}</h2>
-                <p className="sub">A curious creature challenges your lead companion.</p>
+            <div className="battle-card">
+              <div className="battle-header">
+                <div>
+                  <p className="eyebrow">{isTrainerBattle ? 'Trainer Battle' : 'Encounter'}</p>
+                  <h2>{isTrainerBattle ? `Trainer's ${battle.opponent.name}` : `Wild ${battle.opponent.name}`}</h2>
+                  <p className="sub">
+                    {isTrainerBattle
+                      ? 'A rival trainer locks eyes with you and steps forward.'
+                      : 'A curious creature challenges your lead companion.'}
+                  </p>
+                </div>
+                <button className="secondary" onClick={handleFlee}>
+                  Flee
+                </button>
               </div>
-              <button className="secondary" onClick={handleFlee}>
-                Flee
-              </button>
-            </div>
 
             <div className="battle-grid">
               <div className="creature foe">
