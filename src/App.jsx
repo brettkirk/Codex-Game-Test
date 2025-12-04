@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import MAP_LAYOUT from './data/mapLayout.json'
+import MAP_FRAGMENTS from './data/mapLayout.json'
+
+const MAP_LAYOUT = MAP_FRAGMENTS[0].fragmentLayout
 
 const TILE_TYPES = {
   '#': { key: 'wall', label: 'Wall', color: '#8b6d4b' },
