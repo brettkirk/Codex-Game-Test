@@ -4,13 +4,25 @@ import MAP_FRAGMENTS from './data/mapLayout.json'
 
 const MAP_LAYOUT = MAP_FRAGMENTS[0].fragmentLayout
 
+const START_POSITION = (() => {
+  for (let y = 0; y < MAP_LAYOUT.length; y++) {
+    const x = MAP_LAYOUT[y].indexOf('S')
+    if (x !== -1) return { x, y }
+  }
+  return { x: 1, y: 1 }
+})()
+
 const TILE_TYPES = {
   '#': { key: 'wall', label: 'Wall', color: '#8b6d4b' },
   '.': { key: 'trail', label: 'Trail', color: '#d8d4c0' },
+  S: { key: 'start', label: 'Starting Point', color: '#fcd34d' },
+  E: { key: 'entrance', label: 'Cave Entrance', color: '#a3bffa' },
   G: { key: 'grass', label: 'Tall Grass', color: '#4caf50' },
   W: { key: 'water', label: 'Water', color: '#78c7ff' },
   T: { key: 'town', label: 'Town Plaza', color: '#f2b8b5' },
 }
+
+const DEFAULT_TILE = TILE_TYPES['.']
 
 const VIEWPORT = { width: 32, height: 18 }
 
@@ -69,7 +81,7 @@ function createCreature(seedIndex = 0) {
 }
 
 function App() {
-  const [playerPosition, setPlayerPosition] = useState({ x: 1, y: 1 })
+  const [playerPosition, setPlayerPosition] = useState(() => ({ ...START_POSITION }))
   const [, setMessageLog] = useState([
     'You arrive at the Sunpetal Isles—creatures hum with energy in the grass.',
     'Use the arrow keys or WASD to explore. Step into grass to trigger a battle.',
@@ -210,7 +222,7 @@ function App() {
       if (nextAlive === -1) {
         closeBattle('Your team is out of stamina. You retreat to the nearest plaza to recover.')
         healTeam()
-        setPlayerPosition({ x: 1, y: 1 })
+        setPlayerPosition({ ...START_POSITION })
       } else {
         setActiveMember(nextAlive)
         addMessage(`${team[activeMember].name} needs rest. ${team[nextAlive].name} steps up!`)
@@ -242,7 +254,7 @@ function App() {
   }
 
   const resetExploration = () => {
-    setPlayerPosition({ x: 1, y: 1 })
+    setPlayerPosition({ ...START_POSITION })
     healTeam()
     setMessageLog([
       'Your team regroups at the island gate with renewed focus.',
@@ -280,7 +292,7 @@ function App() {
             row.split('').map((tileChar, xOffset) => {
               const x = cameraX + xOffset
               const y = cameraY + yOffset
-              const tile = TILE_TYPES[tileChar]
+              const tile = TILE_TYPES[tileChar] ?? DEFAULT_TILE
               const isPlayer = playerPosition.x === x && playerPosition.y === y
               return (
                 <div
