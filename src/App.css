@@ -86,6 +86,39 @@ h1 {
   box-shadow: 0 6px 14px rgba(37, 99, 235, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
 }
 
+.trainer {
+  position: absolute;
+  inset: 6px;
+  background: linear-gradient(145deg, #fbbf24, #f59e0b);
+  border-radius: 8px;
+  box-shadow: 0 6px 12px rgba(245, 158, 11, 0.35), inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+}
+
+.trainer::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 12px solid #0b1221;
+  transform: rotate(0deg);
+  transition: transform 180ms ease;
+}
+
+.trainer.facing-right::after {
+  transform: rotate(90deg);
+}
+
+.trainer.facing-down::after {
+  transform: rotate(180deg);
+}
+
+.trainer.facing-left::after {
+  transform: rotate(270deg);
+}
+
 .hint {
   margin: 10px 0 0;
   color: #6b7280;
