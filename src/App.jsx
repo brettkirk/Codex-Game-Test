@@ -32,7 +32,7 @@ const DEFAULT_TILE = TILE_TYPES['.']
 
 const VIEWPORT = { width: 32, height: 18 }
 
-const MOVEMENT_STEP = 0.18
+const MOVEMENT_STEP = 0.54
 
 const FACING_DELTAS = {
   up: { dx: 0, dy: -1 },
@@ -443,16 +443,24 @@ function App() {
   }
 
   const cameraX = Math.min(
-    Math.max(playerTile.x - Math.floor(VIEWPORT.width / 2), 0),
+    Math.max(playerPosition.x - VIEWPORT.width / 2, 0),
     mapWidth - VIEWPORT.width
   )
   const cameraY = Math.min(
-    Math.max(playerTile.y - Math.floor(VIEWPORT.height / 2), 0),
+    Math.max(playerPosition.y - VIEWPORT.height / 2, 0),
     mapHeight - VIEWPORT.height
   )
 
-  const visibleTiles = MAP_LAYOUT.slice(cameraY, cameraY + VIEWPORT.height).map((row) =>
-    row.slice(cameraX, cameraX + VIEWPORT.width)
+  const cameraXInt = Math.floor(cameraX)
+  const cameraYInt = Math.floor(cameraY)
+  const cameraOffsetX = cameraX - cameraXInt
+  const cameraOffsetY = cameraY - cameraYInt
+
+  const visibleWidth = Math.min(VIEWPORT.width + 1, mapWidth - cameraXInt)
+  const visibleHeight = Math.min(VIEWPORT.height + 1, mapHeight - cameraYInt)
+
+  const visibleTiles = MAP_LAYOUT.slice(cameraYInt, cameraYInt + visibleHeight).map((row) =>
+    row.slice(cameraXInt, cameraXInt + visibleWidth)
   )
 
   const tileSize = `calc(min(100vw, 100vh * 16 / 9) / ${VIEWPORT.width})`
@@ -461,39 +469,50 @@ function App() {
     <div className="page">
       <main className="playfield">
         <div
-          className="map"
+          className="map-viewport"
           style={{
             '--tile-size': tileSize,
-            gridTemplateColumns: `repeat(${VIEWPORT.width}, var(--tile-size))`,
-            gridTemplateRows: `repeat(${VIEWPORT.height}, var(--tile-size))`,
             width: `calc(var(--tile-size) * ${VIEWPORT.width})`,
             height: `calc(var(--tile-size) * ${VIEWPORT.height})`,
           }}
         >
-          {visibleTiles.map((row, yOffset) =>
-            row.split('').map((tileChar, xOffset) => {
-              const x = cameraX + xOffset
-              const y = cameraY + yOffset
-              const tile = TILE_TYPES[tileChar] ?? DEFAULT_TILE
-              const trainerOnTile = trainers.find((trainer) => trainer.x === x && trainer.y === y && !trainer.defeated)
-              return (
-                <div
-                  key={`${x}-${y}`}
-                  className={`tile tile-${tile.key}`}
-                  style={{ backgroundColor: tile.color }}
-                >
-                  {trainerOnTile ? <div className={`trainer facing-${trainerOnTile.facing}`} /> : null}
-                </div>
-              )
-            })
-          )}
           <div
-            className="player-entity"
+            className="map-grid"
             style={{
-              left: `calc(${playerPosition.x - cameraX} * var(--tile-size))`,
-              top: `calc(${playerPosition.y - cameraY} * var(--tile-size))`,
+              gridTemplateColumns: `repeat(${visibleWidth}, var(--tile-size))`,
+              gridTemplateRows: `repeat(${visibleHeight}, var(--tile-size))`,
+              transform: `translate3d(calc(-1 * var(--tile-size) * ${cameraOffsetX}), calc(-1 * var(--tile-size) * ${cameraOffsetY}), 0)`,
+              width: `calc(var(--tile-size) * ${visibleWidth})`,
+              height: `calc(var(--tile-size) * ${visibleHeight})`,
             }}
-          />
+          >
+            {visibleTiles.map((row, yOffset) =>
+              row.split('').map((tileChar, xOffset) => {
+                const x = cameraXInt + xOffset
+                const y = cameraYInt + yOffset
+                const tile = TILE_TYPES[tileChar] ?? DEFAULT_TILE
+                const trainerOnTile = trainers.find(
+                  (trainer) => trainer.x === x && trainer.y === y && !trainer.defeated
+                )
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    className={`tile tile-${tile.key}`}
+                    style={{ backgroundColor: tile.color }}
+                  >
+                    {trainerOnTile ? <div className={`trainer facing-${trainerOnTile.facing}`} /> : null}
+                  </div>
+                )
+              })
+            )}
+            <div
+              className="player-entity"
+              style={{
+                left: `calc(${playerPosition.x - cameraXInt} * var(--tile-size))`,
+                top: `calc(${playerPosition.y - cameraYInt} * var(--tile-size))`,
+              }}
+            />
+          </div>
         </div>
       </main>
 
