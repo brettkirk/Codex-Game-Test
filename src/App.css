@@ -51,7 +51,7 @@ h1 {
   top: 0;
   left: 0;
   will-change: transform;
-  transition: transform 80ms ease;
+  transition: transform 60ms ease-out;
 }
 
 .tile {
@@ -95,7 +95,7 @@ h1 {
   box-shadow: 0 6px 14px rgba(37, 99, 235, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: transform 80ms ease, left 80ms linear, top 80ms linear;
+  transition: transform 120ms ease, left 80ms ease-out, top 80ms ease-out;
 }
 
 .trainer {
