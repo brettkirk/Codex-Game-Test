@@ -32,7 +32,7 @@ const DEFAULT_TILE = TILE_TYPES['.']
 
 const VIEWPORT = { width: 32, height: 18 }
 
-const MOVEMENT_STEP = 0.54
+const MOVEMENT_SPEED = 3.2
 
 const FACING_DELTAS = {
   up: { dx: 0, dy: -1 },
@@ -119,6 +119,12 @@ function createCreature(seedIndex = 0) {
 
 function App() {
   const [playerPosition, setPlayerPosition] = useState(() => ({ ...START_POSITION }))
+  const playerPositionRef = useRef(playerPosition)
+  const pressedKeysRef = useRef(new Set())
+  const [camera, setCamera] = useState(() => ({
+    x: Math.min(Math.max(START_POSITION.x - VIEWPORT.width / 2, 0), MAP_LAYOUT[0].length - VIEWPORT.width),
+    y: Math.min(Math.max(START_POSITION.y - VIEWPORT.height / 2, 0), MAP_LAYOUT.length - VIEWPORT.height),
+  }))
   const [, setMessageLog] = useState([
     'You arrive at the Sunpetal Isles—creatures hum with energy in the grass.',
     'Use the arrow keys or WASD to explore. Step into grass to trigger a battle, and watch for trainers.',
@@ -144,7 +150,19 @@ function App() {
   }
 
   useEffect(() => {
-    const handleKey = (event) => {
+    playerPositionRef.current = playerPosition
+  }, [playerPosition])
+
+  useEffect(() => {
+    if (battle.active || isPaused || backpackOpen || screen !== 'playing') {
+      pressedKeysRef.current.clear()
+    }
+  }, [backpackOpen, battle.active, isPaused, screen])
+
+  useEffect(() => {
+    const movementKeys = new Set(['arrowup', 'w', 'arrowdown', 's', 'arrowleft', 'a', 'arrowright', 'd'])
+
+    const handleKeyDown = (event) => {
       const key = event.key.toLowerCase()
 
       if (screen !== 'playing') return
@@ -153,6 +171,7 @@ function App() {
         event.preventDefault()
         setIsPaused((prev) => !prev)
         setBackpackOpen(false)
+        pressedKeysRef.current.clear()
         return
       }
 
@@ -160,33 +179,82 @@ function App() {
         event.preventDefault()
         setBackpackOpen((prev) => !prev)
         setIsPaused(false)
+        pressedKeysRef.current.clear()
         return
       }
 
       if (battle.active || isPaused || backpackOpen) return
 
-      const direction = key
-      const deltas = {
-        arrowup: { dx: 0, dy: -1 },
-        w: { dx: 0, dy: -1 },
-        arrowdown: { dx: 0, dy: 1 },
-        s: { dx: 0, dy: 1 },
-        arrowleft: { dx: -1, dy: 0 },
-        a: { dx: -1, dy: 0 },
-        arrowright: { dx: 1, dy: 0 },
-        d: { dx: 1, dy: 0 },
+      if (movementKeys.has(key)) {
+        event.preventDefault()
+        pressedKeysRef.current.add(key)
       }
-
-      const delta = deltas[direction]
-      if (!delta) return
-
-      event.preventDefault()
-      movePlayer(delta)
     }
 
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [battle.active, backpackOpen, isPaused, playerPosition, screen])
+    const handleKeyUp = (event) => {
+      const key = event.key.toLowerCase()
+      if (movementKeys.has(key)) {
+        event.preventDefault()
+        pressedKeysRef.current.delete(key)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [backpackOpen, battle.active, isPaused, screen])
+
+  useEffect(() => {
+    let animationId = null
+    let lastTimestamp = performance.now()
+
+    const deltas = {
+      arrowup: { dx: 0, dy: -1 },
+      w: { dx: 0, dy: -1 },
+      arrowdown: { dx: 0, dy: 1 },
+      s: { dx: 0, dy: 1 },
+      arrowleft: { dx: -1, dy: 0 },
+      a: { dx: -1, dy: 0 },
+      arrowright: { dx: 1, dy: 0 },
+      d: { dx: 1, dy: 0 },
+    }
+
+    const step = (timestamp) => {
+      const elapsedSeconds = Math.min(0.05, (timestamp - lastTimestamp) / 1000)
+      lastTimestamp = timestamp
+
+      if (!battle.active && !isPaused && !backpackOpen && screen === 'playing') {
+        let dx = 0
+        let dy = 0
+
+        pressedKeysRef.current.forEach((key) => {
+          const delta = deltas[key]
+          if (delta) {
+            dx += delta.dx
+            dy += delta.dy
+          }
+        })
+
+        if (dx !== 0 || dy !== 0) {
+          const length = Math.hypot(dx, dy) || 1
+          const normalizedDx = dx / length
+          const normalizedDy = dy / length
+          const distance = MOVEMENT_SPEED * elapsedSeconds
+
+          movePlayer({ dx: normalizedDx, dy: normalizedDy, distance })
+        }
+      }
+
+      animationId = requestAnimationFrame(step)
+    }
+
+    animationId = requestAnimationFrame(step)
+
+    return () => cancelAnimationFrame(animationId)
+  }, [backpackOpen, battle.active, isPaused, screen])
 
   useEffect(() => {
     const trainerIds = new Set(trainers.map((trainer) => trainer.id))
@@ -300,25 +368,27 @@ function App() {
     }
   }
 
-  const movePlayer = ({ dx, dy }) => {
-    const nextX = playerPosition.x + dx * MOVEMENT_STEP
-    const nextY = playerPosition.y + dy * MOVEMENT_STEP
+  const movePlayer = ({ dx, dy, distance }) => {
+    setPlayerPosition((prev) => {
+      const nextX = prev.x + dx * distance
+      const nextY = prev.y + dy * distance
 
-    if (nextX < 0.25 || nextY < 0.25 || nextX >= mapWidth - 0.25 || nextY >= mapHeight - 0.25) {
-      return
-    }
+      if (nextX < 0.25 || nextY < 0.25 || nextX >= mapWidth - 0.25 || nextY >= mapHeight - 0.25) {
+        return prev
+      }
 
-    const nextTileChar = getTileCharAt(nextX, nextY)
-    if (!nextTileChar || nextTileChar === '#') return
+      const nextTileChar = getTileCharAt(nextX, nextY)
+      if (!nextTileChar || nextTileChar === '#') return prev
 
-    const enteredNewTile =
-      Math.floor(playerPosition.x) !== Math.floor(nextX) || Math.floor(playerPosition.y) !== Math.floor(nextY)
+      const enteredNewTile =
+        Math.floor(prev.x) !== Math.floor(nextX) || Math.floor(prev.y) !== Math.floor(nextY)
 
-    setPlayerPosition({ x: nextX, y: nextY })
+      if (enteredNewTile) {
+        handleTileEntry(nextTileChar)
+      }
 
-    if (enteredNewTile) {
-      handleTileEntry(nextTileChar)
-    }
+      return { x: nextX, y: nextY }
+    })
   }
 
   const closeBattle = (resultMessage, defeatedTrainerId = null) => {
@@ -442,19 +512,34 @@ function App() {
     setSeedInput('')
   }
 
-  const cameraX = Math.min(
-    Math.max(playerPosition.x - VIEWPORT.width / 2, 0),
-    mapWidth - VIEWPORT.width
-  )
-  const cameraY = Math.min(
-    Math.max(playerPosition.y - VIEWPORT.height / 2, 0),
-    mapHeight - VIEWPORT.height
-  )
+  useEffect(() => {
+    let rafId = null
 
-  const cameraXInt = Math.floor(cameraX)
-  const cameraYInt = Math.floor(cameraY)
-  const cameraOffsetX = cameraX - cameraXInt
-  const cameraOffsetY = cameraY - cameraYInt
+    const getCameraTarget = () => ({
+      x: Math.min(Math.max(playerPositionRef.current.x - VIEWPORT.width / 2, 0), mapWidth - VIEWPORT.width),
+      y: Math.min(Math.max(playerPositionRef.current.y - VIEWPORT.height / 2, 0), mapHeight - VIEWPORT.height),
+    })
+
+    const smoothFollow = () => {
+      const target = getCameraTarget()
+      setCamera((prev) => {
+        const lerpFactor = 0.2
+        const nextX = prev.x + (target.x - prev.x) * lerpFactor
+        const nextY = prev.y + (target.y - prev.y) * lerpFactor
+        return { x: nextX, y: nextY }
+      })
+
+      rafId = requestAnimationFrame(smoothFollow)
+    }
+
+    rafId = requestAnimationFrame(smoothFollow)
+    return () => cancelAnimationFrame(rafId)
+  }, [mapHeight, mapWidth])
+
+  const cameraXInt = Math.floor(camera.x)
+  const cameraYInt = Math.floor(camera.y)
+  const cameraOffsetX = camera.x - cameraXInt
+  const cameraOffsetY = camera.y - cameraYInt
 
   const visibleWidth = Math.min(VIEWPORT.width + 1, mapWidth - cameraXInt)
   const visibleHeight = Math.min(VIEWPORT.height + 1, mapHeight - cameraYInt)
