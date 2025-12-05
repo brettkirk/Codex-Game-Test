@@ -4,13 +4,18 @@ import MAP_FRAGMENTS from './data/mapLayout.json'
 
 const MAP_LAYOUT = MAP_FRAGMENTS[0].fragmentLayout
 
-const START_POSITION = (() => {
+const START_TILE = (() => {
   for (let y = 0; y < MAP_LAYOUT.length; y++) {
     const x = MAP_LAYOUT[y].indexOf('S')
     if (x !== -1) return { x, y }
   }
   return { x: 1, y: 1 }
 })()
+
+const START_POSITION = {
+  x: START_TILE.x + 0.5,
+  y: START_TILE.y + 0.5,
+}
 
 const TILE_TYPES = {
   '#': { key: 'wall', label: 'Wall', color: '#8b6d4b' },
@@ -27,6 +32,8 @@ const DEFAULT_TILE = TILE_TYPES['.']
 
 const VIEWPORT = { width: 32, height: 18 }
 
+const MOVEMENT_STEP = 0.18
+
 const FACING_DELTAS = {
   up: { dx: 0, dy: -1 },
   right: { dx: 1, dy: 0 },
@@ -37,6 +44,12 @@ const FACING_DELTAS = {
 const facingKeys = Object.keys(FACING_DELTAS)
 
 const getRandomFacing = () => facingKeys[Math.floor(Math.random() * facingKeys.length)]
+
+const getTileCharAt = (x, y) => {
+  const tileY = Math.floor(y)
+  const tileX = Math.floor(x)
+  return MAP_LAYOUT[tileY]?.[tileX]
+}
 
 const initializeTrainers = () => {
   const trainers = []
@@ -125,6 +138,10 @@ function App() {
 
   const mapHeight = MAP_LAYOUT.length
   const mapWidth = MAP_LAYOUT[0].length
+  const playerTile = {
+    x: Math.floor(playerPosition.x),
+    y: Math.floor(playerPosition.y),
+  }
 
   useEffect(() => {
     const handleKey = (event) => {
@@ -237,13 +254,15 @@ function App() {
     if (trainer.defeated) return false
 
     const delta = FACING_DELTAS[trainer.facing]
+    const playerTileX = Math.floor(playerPosition.x)
+    const playerTileY = Math.floor(playerPosition.y)
     for (let step = 1; step <= 3; step++) {
       const checkX = trainer.x + delta.dx * step
       const checkY = trainer.y + delta.dy * step
 
       if (checkX < 0 || checkY < 0 || checkX >= mapWidth || checkY >= mapHeight) break
       if (MAP_LAYOUT[checkY][checkX] === '#') break
-      if (playerPosition.x === checkX && playerPosition.y === checkY) return true
+      if (playerTileX === checkX && playerTileY === checkY) return true
     }
 
     return false
@@ -257,17 +276,19 @@ function App() {
     addMessage('A trainer challenges you to a duel!')
   }
 
-  const movePlayer = ({ dx, dy }) => {
-    const nextX = playerPosition.x + dx
-    const nextY = playerPosition.y + dy
+  const healTeam = () => {
+    setTeam((prev) => prev.map((member) => ({ ...member, hp: member.maxHp })))
+  }
 
-    if (nextX < 0 || nextY < 0 || nextX >= mapWidth || nextY >= mapHeight) return
+  const openBattle = () => {
+    const wildIndex = Math.floor(Math.random() * CREATURE_LIBRARY.length)
+    const wild = createCreature(wildIndex)
+    setBattle({ active: true, opponent: wild, trainerId: null })
+    setTurn('player')
+    addMessage(`A wild ${wild.name} appeared!`)
+  }
 
-    const tileChar = MAP_LAYOUT[nextY][nextX]
-    if (tileChar === '#') return
-
-    setPlayerPosition({ x: nextX, y: nextY })
-
+  const handleTileEntry = (tileChar) => {
     if (tileChar === 'T') {
       healTeam()
       addMessage('A warm lantern light heals your team in the plaza.')
@@ -279,16 +300,25 @@ function App() {
     }
   }
 
-  const healTeam = () => {
-    setTeam((prev) => prev.map((member) => ({ ...member, hp: member.maxHp })))
-  }
+  const movePlayer = ({ dx, dy }) => {
+    const nextX = playerPosition.x + dx * MOVEMENT_STEP
+    const nextY = playerPosition.y + dy * MOVEMENT_STEP
 
-  const openBattle = () => {
-    const wildIndex = Math.floor(Math.random() * CREATURE_LIBRARY.length)
-    const wild = createCreature(wildIndex)
-    setBattle({ active: true, opponent: wild, trainerId: null })
-    setTurn('player')
-    addMessage(`A wild ${wild.name} appeared!`)
+    if (nextX < 0.25 || nextY < 0.25 || nextX >= mapWidth - 0.25 || nextY >= mapHeight - 0.25) {
+      return
+    }
+
+    const nextTileChar = getTileCharAt(nextX, nextY)
+    if (!nextTileChar || nextTileChar === '#') return
+
+    const enteredNewTile =
+      Math.floor(playerPosition.x) !== Math.floor(nextX) || Math.floor(playerPosition.y) !== Math.floor(nextY)
+
+    setPlayerPosition({ x: nextX, y: nextY })
+
+    if (enteredNewTile) {
+      handleTileEntry(nextTileChar)
+    }
   }
 
   const closeBattle = (resultMessage, defeatedTrainerId = null) => {
@@ -412,8 +442,14 @@ function App() {
     setSeedInput('')
   }
 
-  const cameraX = Math.min(Math.max(playerPosition.x - Math.floor(VIEWPORT.width / 2), 0), mapWidth - VIEWPORT.width)
-  const cameraY = Math.min(Math.max(playerPosition.y - Math.floor(VIEWPORT.height / 2), 0), mapHeight - VIEWPORT.height)
+  const cameraX = Math.min(
+    Math.max(playerTile.x - Math.floor(VIEWPORT.width / 2), 0),
+    mapWidth - VIEWPORT.width
+  )
+  const cameraY = Math.min(
+    Math.max(playerTile.y - Math.floor(VIEWPORT.height / 2), 0),
+    mapHeight - VIEWPORT.height
+  )
 
   const visibleTiles = MAP_LAYOUT.slice(cameraY, cameraY + VIEWPORT.height).map((row) =>
     row.slice(cameraX, cameraX + VIEWPORT.width)
@@ -439,7 +475,6 @@ function App() {
               const x = cameraX + xOffset
               const y = cameraY + yOffset
               const tile = TILE_TYPES[tileChar] ?? DEFAULT_TILE
-              const isPlayer = playerPosition.x === x && playerPosition.y === y
               const trainerOnTile = trainers.find((trainer) => trainer.x === x && trainer.y === y && !trainer.defeated)
               return (
                 <div
@@ -448,11 +483,17 @@ function App() {
                   style={{ backgroundColor: tile.color }}
                 >
                   {trainerOnTile ? <div className={`trainer facing-${trainerOnTile.facing}`} /> : null}
-                  {isPlayer ? <div className="player" /> : null}
                 </div>
               )
             })
           )}
+          <div
+            className="player-entity"
+            style={{
+              left: `calc(${playerPosition.x - cameraX} * var(--tile-size))`,
+              top: `calc(${playerPosition.y - cameraY} * var(--tile-size))`,
+            }}
+          />
         </div>
       </main>
 
